@@ -1,0 +1,44 @@
+{
+  "wall_s": 6.507805422996171,
+  "requests": [
+    {
+      "ttft_ms": 820.235108025372,
+      "total_ms": 6487.564903101884,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.5855922680201,
+      "text_chars": 516,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    },
+    {
+      "ttft_ms": 785.0468809483573,
+      "total_ms": 6464.385902974755,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.537833980956712,
+      "text_chars": 529,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    },
+    {
+      "ttft_ms": 819.192738039419,
+      "total_ms": 6486.577762989327,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.585372166616004,
+      "text_chars": 504,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    }
+  ]
+}
