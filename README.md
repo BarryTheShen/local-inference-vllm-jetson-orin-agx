@@ -100,7 +100,7 @@ The benchmark uses vLLM's online `bench serve` client with one concurrent reques
 - Final concurrency-3: TTFT 780–816 ms/request, 22.67–22.72 tok/s/request, 6.45 s wall for 384 output tokens (`benchmarks/final_concurrency3.json`).
 - Q4/TurboQuant was rejected by the vLLM 0.19.0 CLI and is not enabled.
 
-- The 262K setting starts, but tokenizer-verified 260,000- and 262,143-token generation requests abort in vLLM 0.19.0's hybrid Qwen3.6 EngineCore after roughly 84 seconds. Do not claim end-to-end 262K support from the startup line alone; see `docs/optimization-log.md`.
+- The 262K setting starts, but tokenizer-verified 260,000- and 262,143-token generation requests abort in vLLM 0.19.0's hybrid Qwen3.6 EngineCore (the eager variants take roughly 84 seconds; the graph variant aborts immediately). Do not claim end-to-end 262K support from the startup line alone; see `docs/optimization-log.md` and `benchmarks/full_context_failures.json`.
 - Native KV offload and 8 GiB CPU weight offload were tested and rejected by vLLM 0.19.0 hybrid-cache/input-batch errors. Fun-ASR is intentionally stopped for all model experiments.
 
 ## Evidence and history

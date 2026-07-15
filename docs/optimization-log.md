@@ -112,6 +112,7 @@ Application startup complete
 The same profile accepted tokenizer-verified prompts of 262,143 and 260,000 tokens, but one-token generation aborted after approximately 83–85 seconds with `finish_reason=abort`; EngineCore then shut down. The 262,143-token request had `prompt_tokens=262143`, and the 260,000-token request had `prompt_tokens=260000`. This is a failed full-context end-to-end result even though startup advertises the max length.
 
 The graph-free 262K profile is therefore not promoted as a completed full-context solution. The failure is inside the pinned vLLM 0.19.0 hybrid Qwen3.6 path, not an HTTP client timeout. The regular graph profile also starts, but its smaller cache budget cannot improve this boundary case.
+The complete request payload summaries and abort responses are stored in `benchmarks/full_context_failures.json`.
 
 The three-request graph profile started cleanly with Fun-ASR stopped:
 
