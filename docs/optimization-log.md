@@ -246,6 +246,9 @@ The accelerated build reached CMake configuration and CUDA compilation. With 8 j
 - `c45b792`: capture existing INT8 compose and supplied docs archive.
 - `6ea9596`: merge the remote repository license and push the baseline.
 - `2c1271a`: commit exact 32K control evidence and initial MTP overlay.
-- Current uncommitted checkpoint: digest-pinned 262K compose, direct streaming benchmark, reusable benchmark script, context/offload overlays, and this log.
+- `65a8df5`: commit digest-pinned 262K compose, concurrency overlays, reusable benchmark script, and evidence.
+- `0ff309a`: commit runtime findings and source-build progress.
+- `ebeacdb`: commit full-context abort evidence and explicit limitation.
+- `5609d9a`: commit exploratory streaming artifacts.
 
 The production compose is configured for `max_model_len=262144`, FP8 KV, FlashInfer, and the user-approved 0.75 memory target, with Fun-ASR stopped during tests. Startup and normal short requests are validated; exact 260K/262K generation aborts in the pinned vLLM 0.19.0 hybrid path. A custom newer vLLM build or SGLang experiment is the credible next path for end-to-end full-context support.
