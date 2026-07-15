@@ -42,6 +42,8 @@ def main() -> int:
 
     path = Path(sys.argv[1])
     data = json.loads(path.read_text())
+    # vLLM 0.19 stores detailed timestamps in seconds.  The benchmark's
+    # aggregate fields use milliseconds, but the per-request arrays do not.
     ttfts = as_float_list(data.get("ttfts"))
     output_lens = as_int_list(data.get("output_lens"))
     itls = data.get("itls") if isinstance(data.get("itls"), list) else []
@@ -81,7 +83,7 @@ def main() -> int:
     print(f"result: {path}")
     print(f"model: {data.get('model', 'unknown')}")
     print(f"completed: {data.get('completed', 'unknown')} failed: {data.get('failed', 'unknown')}")
-    show("TTFT", ttfts, " ms")
+    show("TTFT", [value * 1000 for value in ttfts], " ms")
     show("decode tok/s", decode_rates, "")
     show("TPOT", tpot_ms, " ms")
     if data.get("output_throughput") is not None:
