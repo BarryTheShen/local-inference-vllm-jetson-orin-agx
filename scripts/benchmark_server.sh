@@ -25,9 +25,9 @@ fi
 
 docker compose -f "$COMPOSE_FILE" exec -T "$SERVICE" \
   vllm bench serve \
-  --backend openai-chat \
+  --backend openai \
   --base-url http://127.0.0.1:8000 \
-  --endpoint /v1/chat/completions \
+  --endpoint /v1/completions \
   --model qwen3.6-35b-a3b-int8 \
   --tokenizer /models/Qwen3.6-35B-A3B-tokenizer \
   --dataset-name random \
