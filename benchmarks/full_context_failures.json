@@ -1,0 +1,144 @@
+{
+  "prompt_token_counts": [
+    262143,
+    260000
+  ],
+  "tests": [
+    {
+      "profile": "gpu_memory_utilization_0.65_graphs",
+      "result": {
+        "status": 200,
+        "elapsed_s": 3.942014314001426,
+        "response": {
+          "id": "cmpl-aebaa578cb744c01",
+          "object": "text_completion",
+          "created": 1784098972,
+          "model": "qwen3.6-35b-a3b-int8",
+          "choices": [
+            {
+              "index": 0,
+              "text": "",
+              "logprobs": null,
+              "finish_reason": "abort",
+              "stop_reason": null,
+              "token_ids": null,
+              "prompt_logprobs": null,
+              "prompt_token_ids": null
+            }
+          ],
+          "service_tier": null,
+          "system_fingerprint": null,
+          "usage": {
+            "prompt_tokens": 262143,
+            "total_tokens": 262143,
+            "completion_tokens": 0,
+            "prompt_tokens_details": null
+          },
+          "kv_transfer_params": null
+        }
+      }
+    },
+    {
+      "profile": "gpu_memory_utilization_0.75_enforce_eager_4096",
+      "result": {
+        "status": 200,
+        "elapsed_s": 85.34003623900935,
+        "response": {
+          "id": "cmpl-a8919ce451f0307c",
+          "object": "text_completion",
+          "created": 1784105229,
+          "model": "qwen3.6-35b-a3b-int8",
+          "choices": [
+            {
+              "index": 0,
+              "text": "",
+              "logprobs": null,
+              "finish_reason": "abort",
+              "stop_reason": null,
+              "token_ids": null,
+              "prompt_logprobs": null,
+              "prompt_token_ids": null
+            }
+          ],
+          "service_tier": null,
+          "system_fingerprint": null,
+          "usage": {
+            "prompt_tokens": 262143,
+            "total_tokens": 262143,
+            "completion_tokens": 0,
+            "prompt_tokens_details": null
+          },
+          "kv_transfer_params": null
+        }
+      }
+    },
+    {
+      "profile": "gpu_memory_utilization_0.75_enforce_eager_2096",
+      "result": {
+        "status": 200,
+        "elapsed_s": 83.30200319294818,
+        "response": {
+          "id": "cmpl-9d2a09cae0540734",
+          "object": "text_completion",
+          "created": 1784107705,
+          "model": "qwen3.6-35b-a3b-int8",
+          "choices": [
+            {
+              "index": 0,
+              "text": "",
+              "logprobs": null,
+              "finish_reason": "abort",
+              "stop_reason": null,
+              "token_ids": null,
+              "prompt_logprobs": null,
+              "prompt_token_ids": null
+            }
+          ],
+          "service_tier": null,
+          "system_fingerprint": null,
+          "usage": {
+            "prompt_tokens": 262143,
+            "total_tokens": 262143,
+            "completion_tokens": 0,
+            "prompt_tokens_details": null
+          },
+          "kv_transfer_params": null
+        }
+      }
+    },
+    {
+      "profile": "gpu_memory_utilization_0.75_enforce_eager_2096_260000",
+      "result": {
+        "status": 200,
+        "elapsed_s": 84.4964093369199,
+        "response": {
+          "id": "cmpl-84217b91ad4118ad",
+          "object": "text_completion",
+          "created": 1784109153,
+          "model": "qwen3.6-35b-a3b-int8",
+          "choices": [
+            {
+              "index": 0,
+              "text": "",
+              "logprobs": null,
+              "finish_reason": "abort",
+              "stop_reason": null,
+              "token_ids": null,
+              "prompt_logprobs": null,
+              "prompt_token_ids": null
+            }
+          ],
+          "service_tier": null,
+          "system_fingerprint": null,
+          "usage": {
+            "prompt_tokens": 260000,
+            "total_tokens": 260000,
+            "completion_tokens": 0,
+            "prompt_tokens_details": null
+          },
+          "kv_transfer_params": null
+        }
+      }
+    }
+  ]
+}
