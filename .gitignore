@@ -1,0 +1,6 @@
+# Local secrets and runtime artifacts
+.env
+**/.env
+*.log
+__pycache__/
+*.py[cod]

@@ -19,7 +19,7 @@ services:
   # PHASE 1A — DOWNLOAD INT8 AUTOROUND WEIGHTS (w8a16-gs128 branch)
   # ============================================================================
   download-35b-int8:
-    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    image: ghcr.io/nvidia-ai-iot/vllm:0.19.0-r36.4.tegra-aarch64-cu126-22.04
     container_name: download-35b-int8
     restart: "no"
     volumes:
@@ -62,7 +62,7 @@ services:
   #  same fix as the 27B Lorbus AutoRound doc / parent §6.6)
   # ============================================================================
   download-tokenizer:
-    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    image: ghcr.io/nvidia-ai-iot/vllm:0.19.0-r36.4.tegra-aarch64-cu126-22.04
     container_name: download-35b-int8-tokenizer
     restart: "no"
     volumes:
@@ -106,7 +106,7 @@ services:
   # PHASE 2 — SERVE INT8 AUTOROUND (starts only after both downloads exit 0)
   # ============================================================================
   vllm-35b-int8:
-    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    image: ghcr.io/nvidia-ai-iot/vllm:0.19.0-r36.4.tegra-aarch64-cu126-22.04
     container_name: vllm-35b-int8
     runtime: nvidia
     ipc: host
@@ -138,12 +138,13 @@ services:
       # Forcing --quantization=auto_round is an INVALID argparse choice on this build and
       # makes vLLM exit immediately at startup — that was the original bug.
       - --dtype=bfloat16                                # matches the proven §3.2 Orin path
-      - --max-model-len=262144                          # 128K — INT8 weight load leaves less KV pool than Q4
-      - --gpu-memory-utilization=0.75                   # weights ~36 + runtime ~6.7 + KV ~11.7 = full bucket
-      - --max-num-seqs=8                                # halved vs Q4 doc — smaller KV pool
-      - --max-num-batched-tokens=4096                   # lower than Q4 doc's 8192 to save activation memory
+      - --max-model-len=32768                           # practical latency profile; raise only after memory headroom is measured
+      - --gpu-memory-utilization=0.65                   # INT8 weights plus runtime fit beside the co-hosted services
+      - --max-num-seqs=1                                # single-session profile; keeps CUDA-graph capture small
+      - --max-num-batched-tokens=4096                   # prefill budget; benchmark 2048/8192 before changing
       - --enable-prefix-caching
-      - --kv-cache-dtype=fp8                            # 10 KB/token; if Inductor errors on SM 8.7, try fp8_e5m2
+      - --kv-cache-dtype=fp8                            # FP8 is the supported SM 8.7 cache compression path
+      - --attention-backend=FLASHINFER                  # deterministic FP8-capable backend on Orin SM 8.7
       - --reasoning-parser=qwen3                        # keep thinking ON, route <think> into reasoning_content
       - --enable-auto-tool-choice
       - --tool-call-parser=qwen3_xml                    # Claude Code tool use; do NOT use qwen3_coder (vllm#39056)
