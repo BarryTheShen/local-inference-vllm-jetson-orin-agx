@@ -1,0 +1,156 @@
+x-hf-download-env: &hf-download-env
+  http_proxy: http://192.168.110.28:10808
+  https_proxy: http://192.168.110.28:10808
+  HTTP_PROXY: http://192.168.110.28:10808
+  HTTPS_PROXY: http://192.168.110.28:10808
+  NO_PROXY: localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8,hf-mirror.com,.hf-mirror.com   # reach the China mirror DIRECTLY — tunneling it through the overseas proxy causes the HEAD-call LocalEntryNotFoundError
+  HF_ENDPOINT: https://hf-mirror.com
+  HF_HUB_ENABLE_HF_TRANSFER: "1"   # parallel chunked download via Rust hf_transfer (~10x speedup); needs huggingface_hub <1.0 (pinned in the pip line below)
+  HF_HUB_DISABLE_XET: "1"          # hub 1.x defaults to the Xet backend, which ignores HF_ENDPOINT (hf-mirror) and fails behind the proxy
+
+x-vllm-serve-env: &vllm-serve-env
+  HF_HUB_OFFLINE: "1"              # forbid network — must serve from /models/<name>
+  TRANSFORMERS_OFFLINE: "1"
+  NO_PROXY: localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8
+
+services:
+
+  # ============================================================================
+  # PHASE 1A — DOWNLOAD INT8 AUTOROUND WEIGHTS (w8a16-gs128 branch)
+  # ============================================================================
+  download-35b-int8:
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    container_name: download-35b-int8
+    restart: "no"
+    volumes:
+      - ${HOME}/models:/models
+    environment: *hf-download-env
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -ex
+        echo "[download-35b-int8] $$(date -u +%FT%TZ) — starting"
+        echo "[download-35b-int8] Python: $$(python3 --version 2>&1)"
+
+        python3 -m pip install --quiet --no-input --disable-pip-version-check -U "huggingface_hub[hf_transfer]>=0.34,<1.0" || {
+          echo "[download-35b-int8] pip install failed — disabling hf_transfer fast-path and continuing single-stream"
+          export HF_HUB_ENABLE_HF_TRANSFER=0
+        }
+
+        DEST=/models/Qwen3.6-35B-A3B-INT8-AutoRound
+        if [ -f "$$DEST/config.json" ]; then
+          echo "[download-35b-int8] Already present at $$DEST — skipping."
+          du -sh "$$DEST" || true
+          exit 0
+        fi
+        mkdir -p "$$DEST"
+        echo "[download-35b-int8] Downloading Minachist/Qwen3.6-35B-A3B-INT8-AutoRound (w8a16-gs128) -> $$DEST"
+
+        # NOTE: --revision pins the w8a16 group-size-128 branch (parent doc §3.10a).
+        if command -v hf >/dev/null 2>&1; then
+          hf download Minachist/Qwen3.6-35B-A3B-INT8-AutoRound --revision w8a16-gs128 --local-dir "$$DEST"
+        else
+          huggingface-cli download Minachist/Qwen3.6-35B-A3B-INT8-AutoRound --revision w8a16-gs128 --local-dir "$$DEST"
+        fi
+
+        echo "[download-35b-int8] Done. Contents:"
+        ls -lah "$$DEST" | head -30
+
+  # ============================================================================
+  # PHASE 1B — DOWNLOAD CLEAN QWEN3.6-35B-A3B TOKENIZER FALLBACK
+  # (AutoRound VLM checkpoints can trip 'TokenizersBackend does not exist';
+  #  same fix as the 27B Lorbus AutoRound doc / parent §6.6)
+  # ============================================================================
+  download-tokenizer:
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    container_name: download-35b-int8-tokenizer
+    restart: "no"
+    volumes:
+      - ${HOME}/models:/models
+    environment: *hf-download-env
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -ex
+        echo "[download-tokenizer] $$(date -u +%FT%TZ) — starting"
+
+        python3 -m pip install --quiet --no-input --disable-pip-version-check -U "huggingface_hub[hf_transfer]>=0.34,<1.0" || {
+          echo "[download-tokenizer] pip install failed — disabling hf_transfer fast path and continuing single-stream"
+          export HF_HUB_ENABLE_HF_TRANSFER=0
+        }
+
+        DEST=/models/Qwen3.6-35B-A3B-tokenizer
+        if [ -f "$$DEST/tokenizer_config.json" ] || [ -f "$$DEST/tokenizer.json" ]; then
+          echo "[download-tokenizer] Already present at $$DEST — skipping."
+          ls -lah "$$DEST" | head -30 || true
+          exit 0
+        fi
+
+        mkdir -p "$$DEST"
+        echo "[download-tokenizer] Downloading official Qwen/Qwen3.6-35B-A3B tokenizer files -> $$DEST"
+
+        if command -v hf >/dev/null 2>&1; then
+          hf download Qwen/Qwen3.6-35B-A3B \
+            --local-dir "$$DEST" \
+            --include "tokenizer*" "vocab*" "merges.txt" "added_tokens.json" "special_tokens_map.json" "chat_template*" "generation_config.json"
+        else
+          huggingface-cli download Qwen/Qwen3.6-35B-A3B \
+            --local-dir "$$DEST" \
+            --include "tokenizer*" "vocab*" "merges.txt" "added_tokens.json" "special_tokens_map.json" "chat_template*" "generation_config.json"
+        fi
+
+        echo "[download-tokenizer] Done. Contents:"
+        ls -lah "$$DEST" | head -30
+
+  # ============================================================================
+  # PHASE 2 — SERVE INT8 AUTOROUND (starts only after both downloads exit 0)
+  # ============================================================================
+  vllm-35b-int8:
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
+    container_name: vllm-35b-int8
+    runtime: nvidia
+    ipc: host
+    shm_size: "16g"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # publish directly to host — Claude Code talks straight to vLLM
+    depends_on:
+      download-35b-int8:
+        condition: service_completed_successfully
+      download-tokenizer:
+        condition: service_completed_successfully
+    volumes:
+      - ${HOME}/models:/models:ro
+    environment: *vllm-serve-env
+    entrypoint: ["vllm", "serve"]
+    command:
+      - /models/Qwen3.6-35B-A3B-INT8-AutoRound
+      - --served-model-name=qwen3.6-35b-a3b-int8
+      - --host=0.0.0.0
+      - --port=8000
+      - --trust-remote-code
+      - --tokenizer=/models/Qwen3.6-35B-A3B-tokenizer   # clean official tokenizer (parent §6.6 fix)
+      # NO --quantization flag here. vLLM auto-detects AutoRound from the checkpoint
+      # (config.json quantization_config, quant_method="auto-round") and loads the W8A16 path.
+      # Forcing --quantization=auto_round is an INVALID argparse choice on this build and
+      # makes vLLM exit immediately at startup — that was the original bug.
+      - --dtype=bfloat16                                # matches the proven §3.2 Orin path
+      - --max-model-len=262144                          # 128K — INT8 weight load leaves less KV pool than Q4
+      - --gpu-memory-utilization=0.75                   # weights ~36 + runtime ~6.7 + KV ~11.7 = full bucket
+      - --max-num-seqs=8                                # halved vs Q4 doc — smaller KV pool
+      - --max-num-batched-tokens=4096                   # lower than Q4 doc's 8192 to save activation memory
+      - --enable-prefix-caching
+      - --kv-cache-dtype=fp8                            # 10 KB/token; if Inductor errors on SM 8.7, try fp8_e5m2
+      - --reasoning-parser=qwen3                        # keep thinking ON, route <think> into reasoning_content
+      - --enable-auto-tool-choice
+      - --tool-call-parser=qwen3_xml                    # Claude Code tool use; do NOT use qwen3_coder (vllm#39056)
+    healthcheck:
+      # Image has python3 but no curl. Use urllib for a 1-line healthcheck.
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 1800s   # 30 min: cold weights load + CUDA graph capture (INT8 is a bigger load than Q4)
