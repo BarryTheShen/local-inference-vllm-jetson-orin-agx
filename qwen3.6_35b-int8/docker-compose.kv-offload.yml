@@ -1,6 +1,6 @@
-# Experimental overlay: text-only MTP-1 latency profile.
-# Apply with the base compose file after stopping its running server:
-#   docker compose -f docker-compose.yml -f docker-compose.mtp1.yml up
+# Experimental overlay: mandatory 262K context with native CPU KV offload.
+# Fun-ASR should remain stopped during this experiment.
+#   docker compose -f docker-compose.yml -f docker-compose.kv-offload.yml up
 services:
   vllm-35b-int8:
     restart: "no"
@@ -11,17 +11,17 @@ services:
       - --port=8000
       - --trust-remote-code
       - --tokenizer=/models/Qwen3.6-35B-A3B-tokenizer
-      - --language-model-only
       - --dtype=bfloat16
-      - --max-model-len=32768
-      - --gpu-memory-utilization=0.65
+      - --max-model-len=262144
+      - --gpu-memory-utilization=0.75
       - --max-num-seqs=1
       - --max-num-batched-tokens=4096
       - --enable-prefix-caching
       - --kv-cache-dtype=fp8
+      - --kv-offloading-backend=native
+      - --kv-offloading-size=8
+      - --disable-hybrid-kv-cache-manager
       - --attention-backend=FLASHINFER
       - --reasoning-parser=qwen3
       - --enable-auto-tool-choice
       - --tool-call-parser=qwen3_xml
-      - --enforce-eager
-      - --speculative-config={"method":"mtp","num_speculative_tokens":1}

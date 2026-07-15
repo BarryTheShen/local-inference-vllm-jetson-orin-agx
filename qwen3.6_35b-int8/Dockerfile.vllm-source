@@ -1,0 +1,26 @@
+# Experimental Jetson source build for a newer vLLM release.
+# Build on the target host with JetPack-matched CUDA/PyTorch from the pinned base.
+FROM ghcr.io/nvidia-ai-iot/vllm@sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd
+
+ARG VLLM_REF=v0.21.0
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ENV VLLM_TARGET_DEVICE=cuda \
+    TORCH_CUDA_ARCH_LIST=8.7 \
+    MAX_JOBS=1 \
+    NVCC_THREADS=1 \
+    PIP_NO_CACHE_DIR=1 \
+    http_proxy=${HTTP_PROXY} \
+    https_proxy=${HTTPS_PROXY} \
+    HTTP_PROXY=${HTTP_PROXY} \
+    HTTPS_PROXY=${HTTPS_PROXY}
+
+WORKDIR /opt
+RUN git clone --depth=1 --branch ${VLLM_REF} https://github.com/vllm-project/vllm.git
+WORKDIR /opt/vllm
+RUN python3 use_existing_torch.py
+RUN python3 -m pip install -r requirements/build/cuda.txt
+RUN python3 -m pip install --no-build-isolation --no-deps -e .
+
+LABEL org.opencontainers.image.description="Experimental vLLM source build for Jetson Orin SM87"
+LABEL org.opencontainers.image.version="${VLLM_REF}"

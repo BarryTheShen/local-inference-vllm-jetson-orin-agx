@@ -16,16 +16,16 @@ This repository contains the reproducible vLLM deployment and benchmark tooling 
 docker compose -f qwen3.6_35b-int8/docker-compose.yml up
 ```
 
-The compose file pins the NVIDIA AI-IoT Jetson Orin image at the published R36.4/CUDA 12.6 build (`vLLM 0.19.0`) instead of using a floating `latest` tag. The current serving profile is:
+The compose file pins the NVIDIA AI-IoT Jetson Orin image at the published R36.4/CUDA 12.6 build (`vLLM 0.19.0`) by digest (`sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd`) instead of using a floating `latest` tag. The current serving profile is:
 
 | Setting | Value | Reason |
 | --- | --- | --- |
 | Weight checkpoint | `/models/Qwen3.6-35B-A3B-INT8-AutoRound` | 8-bit AutoRound, group size 128 |
 | `dtype` | `bfloat16` | W8A16 activations; matches the known Orin path |
-| `max-model-len` | `32768` | Practical context budget; avoids the previous 262K reservation |
-| `gpu-memory-utilization` | `0.65` | Leaves headroom for unified-memory host services |
-| `max-num-seqs` | `1` | Single-session latency profile and small CUDA-graph capture |
-| `max-num-batched-tokens` | `4096` | Prefill budget; compare with 2048/8192 using the benchmark tools |
+| `max-model-len` | `262144` | Required full Qwen3.6 context window |
+| `gpu-memory-utilization` | `0.75` | User-approved target; Fun-ASR is stopped during model tests |
+| `max-num-seqs` | `3` | Supports measured two-to-three parallel short requests |
+| `max-num-batched-tokens` | `4096` | Established prefill budget and compile range |
 | `kv-cache-dtype` | `fp8` | Supported compressed KV cache in vLLM 0.19.0 |
 | `attention-backend` | `FLASHINFER` | Explicit FP8-capable attention backend for Orin SM 8.7 |
 | Prefix caching | enabled | Helps repeated identical prefixes; does not speed unrelated prompts |
@@ -35,7 +35,7 @@ The model's quantization metadata is read from the checkpoint. Do **not** add `-
 
 ## Why the image is pinned at vLLM 0.19.0
 
-The NVIDIA AI-IoT package page currently lists the Orin R36.4/CUDA 12.6 tags as vLLM 0.19.0. The newer generic vLLM releases are published with newer CUDA/PyTorch baselines, while the Orin-specific package does not expose a validated >0.19 Orin tag. A newer version is therefore not automatically faster on this board: losing the Jetson-compatible kernels or CUDA ABI is a larger risk than the version number suggests.
+The NVIDIA AI-IoT package page currently lists the Orin R36.4/CUDA 12.6 tags as vLLM 0.19.0. The newer generic vLLM releases are published with newer CUDA/PyTorch baselines, while the Orin-specific package does not expose a validated >0.19 Orin tag. A newer version is therefore not automatically faster on this board: losing the Jetson-compatible kernels or CUDA ABI is a larger risk than the version number suggests. The exact image digest is recorded above so download and serve containers use identical bits.
 
 A future upgrade should be treated as a separate porting project: validate the JetPack/CUDA ABI, SM 8.7 kernels, AutoRound loading, FP8 KV backend, hybrid Qwen3.6 execution, and the benchmark suite before changing the production image.
 
@@ -60,7 +60,7 @@ No KV experiment may use more memory than the FP8 control. A candidate that allo
 
 ## Benchmarking
 
-Wait until the container healthcheck is healthy, then run one benchmark command. The script does not restart vLLM:
+Wait until the container healthcheck is healthy, then run one benchmark command. The script does not intentionally restart vLLM, but a failed engine experiment can still trigger the compose `unless-stopped` restart policy:
 
 ```bash
 scripts/benchmark_server.sh
@@ -79,7 +79,29 @@ NUM_PROMPTS=8 NUM_WARMUPS=0 RESULT_FILENAME=curve.json scripts/benchmark_server.
 python3 scripts/summarize_benchmark.py benchmarks/curve.json
 ```
 
+For a lightweight direct streaming smoke test that does not start a second vLLM benchmark process inside the memory-constrained container:
+
+```bash
+python3 scripts/measure_stream.py \
+  --warmups 1 --requests 3 \
+  --output benchmarks/direct_stream.json
+```
+
+This reports TTFT and decode tok/s from the streamed API response. It is useful for validating the 262K profile after startup; keep the exact random-length `bench serve` files for control comparisons.
+
 The benchmark uses vLLM's online `bench serve` client with one concurrent request, deterministic random lengths, detailed per-request output, and the served API model name. Report **TTFT**, **TPOT/decode tok/s**, and aggregate throughput separately. Aggregate output throughput is not single-session decode speed.
+
+## Measured results and rejected experiments
+
+- Exact 256-input/128-output control with two warmups: TTFT 221.10 ms, TPOT 34.97 ms, decode 28.59 tok/s, aggregate 27.45 tok/s (`benchmarks/optimized_warm.json`).
+- Direct 15-token prompt on the healthy 262K profile: three 128-token requests measured 212.39–214.67 ms TTFT and 28.47–28.50 tok/s (`benchmarks/direct_stream_final_script.json`).
+- Native MTP-1 failed during EngineCore initialization; an `--enforce-eager` retry also failed after KV setup. `--language-model-only` likewise failed during engine initialization. These overlays remain experimental and are not enabled by the production compose.
+- Final concurrency-2: TTFT 430–439 ms/request, 25.63–25.75 tok/s/request, 5.44 s wall for 256 output tokens (`benchmarks/final_concurrency2.json`).
+- Final concurrency-3: TTFT 780–816 ms/request, 22.67–22.72 tok/s/request, 6.45 s wall for 384 output tokens (`benchmarks/final_concurrency3.json`).
+- Q4/TurboQuant was rejected by the vLLM 0.19.0 CLI and is not enabled.
+
+- The 262K setting starts, but tokenizer-verified 260,000- and 262,143-token generation requests abort in vLLM 0.19.0's hybrid Qwen3.6 EngineCore after roughly 84 seconds. Do not claim end-to-end 262K support from the startup line alone; see `docs/optimization-log.md`.
+- Native KV offload and 8 GiB CPU weight offload were tested and rejected by vLLM 0.19.0 hybrid-cache/input-batch errors. Fun-ASR is intentionally stopped for all model experiments.
 
 ## Evidence and history
 
@@ -88,6 +110,7 @@ The benchmark uses vLLM's online `bench serve` client with one concurrent reques
 - `scripts/benchmark_server.sh` runs reproducible online measurements.
 - `scripts/summarize_benchmark.py` computes per-request TTFT and decode tok/s from detailed JSON.
 - `vLLM docs.zip` is the supplied prior optimization notebook export retained as research input; its conclusions are not treated as new measurements.
+- `scripts/measure_stream.py` validates direct streaming without creating another vLLM benchmark process.
 
 ## References
 
@@ -98,3 +121,9 @@ The benchmark uses vLLM's online `bench serve` client with one concurrent reques
 - [vLLM 0.20.0 release: TurboQuant introduction](https://github.com/vllm-project/vllm/releases/tag/v0.20.0)
 - [vLLM TurboQuant study](https://vllm.ai/blog/2026-05-11-turboquant)
 - [Qwen3.6 model repository](https://github.com/QwenLM/Qwen3.6)
+
+- [Qwen3.6 architecture/config](https://modelscope.cn/models/Qwen/Qwen3.6-35B-A3B/resolve/master/config.json)
+- [SGLang AutoRound W8A16](https://www.lmsys.org/blog/2025-11-13-AutoRound)
+- [SGLang Jetson guide](https://docs.sglang.ai/docs/hardware-platforms/nvidia_jetson)
+- [llama.cpp CUDA build](https://raw.githubusercontent.com/ggml-org/llama.cpp/master/docs/build.md)
+- [llama.cpp Jetson MoE issue](https://github.com/ggml-org/llama.cpp/issues/19219)

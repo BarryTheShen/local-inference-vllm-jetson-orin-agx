@@ -1,0 +1,58 @@
+{
+  "warmup": {
+    "ttft_ms": 2497.631930047646,
+    "total_ms": 6980.107700102963,
+    "output_tokens": 128,
+    "chunks": 128,
+    "decode_tok_s": 28.555647942391534,
+    "text_chars": 529,
+    "usage": {
+      "prompt_tokens": 13,
+      "total_tokens": 141,
+      "completion_tokens": 128
+    }
+  },
+  "concurrency": 3,
+  "wall_s": 6.449765563942492,
+  "measurements": [
+    {
+      "ttft_ms": 815.897544962354,
+      "total_ms": 6448.691469966434,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.724069387982677,
+      "text_chars": 510,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    },
+    {
+      "ttft_ms": 780.4935070453212,
+      "total_ms": 6427.668691962026,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.66619961461103,
+      "text_chars": 529,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    },
+    {
+      "ttft_ms": 815.0930779520422,
+      "total_ms": 6447.780956979841,
+      "output_tokens": 128,
+      "chunks": 128,
+      "decode_tok_s": 22.724497211461465,
+      "text_chars": 510,
+      "usage": {
+        "prompt_tokens": 13,
+        "total_tokens": 141,
+        "completion_tokens": 128
+      }
+    }
+  ]
+}
