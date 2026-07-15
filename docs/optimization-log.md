@@ -185,6 +185,8 @@ The final production candidate uses `max-num-seqs=3` and the reusable script val
 - final concurrency 2: TTFT 430–439 ms/request, decode 25.63–25.75 tok/s/request, wall 5.44 s for 256 output tokens (`benchmarks/final_concurrency2.json`);
 - final concurrency 3: TTFT 780–816 ms/request, decode 22.67–22.72 tok/s/request, wall 6.45 s for 384 output tokens (`benchmarks/final_concurrency3.json`);
 - single-request warmup in the same runs remains about 28.5 tok/s decode.
+
+After the final compose was restored, one automatic EngineCore restart occurred immediately after graph capture; the second startup was healthy. `benchmarks/final_concurrency3_postrestart.json` then completed three requests with TTFT 755–788 ms/request and decode 21.73–21.77 tok/s/request, and the healthcheck remained healthy for 60 seconds.
 ## 10. Experiments and rejected candidates
 
 ### MTP-1, normal CUDA graphs
@@ -227,15 +229,16 @@ The read-only runtime survey ranked candidates for Jetson AGX Orin 64GB (SM87, J
 The source survey does not replace hardware smoke tests. Any alternate must preserve INT8-or-better weights, validate `max_model_len=262144`, and run three simultaneous API requests before it can replace the pinned profile.
 ## 12. Custom vLLM 0.21 source build in progress
 
-The host clone of upstream vLLM tag `v0.21.0` completed at source commit `ad7125a431e176d4161099480a66f0169609a690`. `qwen3.6_35b-int8/Dockerfile.vllm-source` records the reproducible recipe: pinned Jetson vLLM base, existing JetPack PyTorch, `TORCH_CUDA_ARCH_LIST=8.7`, one compile job, and no test suite.
+The host clone of upstream vLLM tag `v0.21.0` completed at source commit `ad7125a431e176d4161099480a66f0169609a690`. `qwen3.6_35b-int8/Dockerfile.vllm-source` records the conservative reproducible recipe: pinned Jetson vLLM base, existing JetPack PyTorch, `TORCH_CUDA_ARCH_LIST=8.7`, one compile job, and no test suite. A detached accelerated build is separately using vendored CUTLASS 4.4.2, Triton 3.6.0, and unsupported-SM87 placeholders for DeepGEMM/FlashMLA.
 
-The first Dockerfile clone failed because the container could not complete the GitHub TLS handshake. A host clone through the configured proxy succeeded. The local-source image build is compiling now. CMake has confirmed CUDA 12.6.85 and SM87 target selection, but reports:
+The first Dockerfile clone failed because the container could not complete the GitHub TLS handshake. A host clone through the configured proxy succeeded. Vendored CUTLASS/Triton/FlashAttention sources and SM87-disabled placeholders allowed CMake to reach CUDA compilation. CMake confirmed CUDA 12.6.85 and SM87 target selection, but reported:
 
 - QuTLASS requires CUDA 12.8+ and is skipped;
 - FlashAttention's supported target list exposes 8.6 rather than 8.7;
 - the source build warns that its expected PyTorch version differs from the base image.
 
-These warnings make this an experiment, not a promotion. If the image completes, it must pass model load, 262K request, short-request TTFT, and two/three-request concurrency before the production compose changes.
+The accelerated build reached CMake configuration and CUDA compilation. With 8 jobs it reached `37/339` objects in 46 minutes; a fresh 16-job retry reached `4/339` in 11 minutes. The compile was stopped before producing an image because this source path is not a practical bounded deployment step on the target and no runnable newer image was available.
+
 
 ## 13. Git checkpoints and current progress
 
