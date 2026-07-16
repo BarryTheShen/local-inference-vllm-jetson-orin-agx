@@ -19,7 +19,7 @@ services:
   # PHASE 1A — DOWNLOAD INT8 AUTOROUND WEIGHTS (w8a16-gs128 branch)
   # ============================================================================
   download-35b-int8:
-    image: ghcr.io/nvidia-ai-iot/vllm@sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
     container_name: download-35b-int8
     restart: "no"
     volumes:
@@ -62,7 +62,7 @@ services:
   #  same fix as the 27B Lorbus AutoRound doc / parent §6.6)
   # ============================================================================
   download-tokenizer:
-    image: ghcr.io/nvidia-ai-iot/vllm@sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
     container_name: download-35b-int8-tokenizer
     restart: "no"
     volumes:
@@ -106,7 +106,7 @@ services:
   # PHASE 2 — SERVE INT8 AUTOROUND (starts only after both downloads exit 0)
   # ============================================================================
   vllm-35b-int8:
-    image: ghcr.io/nvidia-ai-iot/vllm@sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd
+    image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
     container_name: vllm-35b-int8
     runtime: nvidia
     ipc: host
@@ -138,10 +138,10 @@ services:
       # Forcing --quantization=auto_round is an INVALID argparse choice on this build and
       # makes vLLM exit immediately at startup — that was the original bug.
       - --dtype=bfloat16                                # matches the proven §3.2 Orin path
-      - --max-model-len=262144                           # required full Qwen3.6 context window
-      - --gpu-memory-utilization=0.75                   # user-approved unified-memory target; page cache is reclaimed before startup
-      - --max-num-seqs=3                                # serve 2-3 parallel short requests; measured concurrency profile
-      - --max-num-batched-tokens=4096                   # Mamba-aligned prefill budget (block size 2096)
+      - --max-model-len=262144                          # 128K — INT8 weight load leaves less KV pool than Q4
+      - --gpu-memory-utilization=0.75                   # weights ~36 + runtime ~6.7 + KV ~11.7 = full bucket
+      - --max-num-seqs=8                                # halved vs Q4 doc — smaller KV pool
+      - --max-num-batched-tokens=4096                   # lower than Q4 doc's 8192 to save activation memory
       - --enable-prefix-caching
       - --kv-cache-dtype=fp8                            # FP8 is the supported SM 8.7 cache compression path
       - --attention-backend=FLASHINFER                  # deterministic FP8-capable backend on Orin SM 8.7
