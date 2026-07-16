@@ -16,7 +16,7 @@ This repository contains the reproducible vLLM deployment and benchmark tooling 
 docker compose -f qwen3.6_35b-int8/docker-compose.yml up
 ```
 
-The compose file pins the NVIDIA AI-IoT Jetson Orin image at the published R36.4/CUDA 12.6 build (`vLLM 0.19.0`) by digest (`sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd`) instead of using a floating `latest` tag. The current serving profile is:
+The compose file is restored to the original NVIDIA AI-IoT Jetson Orin INT8 stack at the user's request: `ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin`. The weight checkpoint and original serving flags are retained:
 
 | Setting | Value | Reason |
 | --- | --- | --- |
@@ -24,7 +24,7 @@ The compose file pins the NVIDIA AI-IoT Jetson Orin image at the published R36.4
 | `dtype` | `bfloat16` | W8A16 activations; matches the known Orin path |
 | `max-model-len` | `262144` | Required full Qwen3.6 context window |
 | `gpu-memory-utilization` | `0.75` | User-approved target; Fun-ASR is stopped during model tests |
-| `max-num-seqs` | `3` | Supports measured two-to-three parallel short requests |
+| `max-num-seqs` | `8` | Original INT8 profile; restores the user's previous scheduler setting |
 | `max-num-batched-tokens` | `4096` | Established prefill budget and compile range |
 | `kv-cache-dtype` | `fp8` | Supported compressed KV cache in vLLM 0.19.0 |
 | `attention-backend` | `FLASHINFER` | Explicit FP8-capable attention backend for Orin SM 8.7 |
@@ -33,9 +33,9 @@ The compose file pins the NVIDIA AI-IoT Jetson Orin image at the published R36.4
 
 The model's quantization metadata is read from the checkpoint. Do **not** add `--quantization=auto_round`; this image accepts the checkpoint metadata and reports `quantization=inc` internally.
 
-## Why the image is pinned at vLLM 0.19.0
+## Original image/profile restored
 
-The NVIDIA AI-IoT package page currently lists the Orin R36.4/CUDA 12.6 tags as vLLM 0.19.0. The newer generic vLLM releases are published with newer CUDA/PyTorch baselines, while the Orin-specific package does not expose a validated >0.19 Orin tag. A newer version is therefore not automatically faster on this board: losing the Jetson-compatible kernels or CUDA ABI is a larger risk than the version number suggests. The exact image digest is recorded above so download and serve containers use identical bits.
+The production compose intentionally uses the original floating `latest-jetson-orin` tag rather than the experimental digest pin. The tested digest and newer-runtime experiments remain documented for reference, but are not active in the user's stack. The original INT8 profile uses `max-num-seqs=8`, `max-num-batched-tokens=4096`, FP8 KV, and 0.75 memory utilization.
 
 A future upgrade should be treated as a separate porting project: validate the JetPack/CUDA ABI, SM 8.7 kernels, AutoRound loading, FP8 KV backend, hybrid Qwen3.6 execution, and the benchmark suite before changing the production image.
 
@@ -92,6 +92,7 @@ This reports TTFT and decode tok/s from the streamed API response. It is useful 
 The benchmark uses vLLM's online `bench serve` client with one concurrent request, deterministic random lengths, detailed per-request output, and the served API model name. Report **TTFT**, **TPOT/decode tok/s**, and aggregate throughput separately. Aggregate output throughput is not single-session decode speed.
 
 ## Measured results and rejected experiments
+The concurrency measurements below are archived experiments from the temporary `max-num-seqs=3` profile. The runnable production compose has been restored to the original `max-num-seqs=8` INT8 setting; these results are not claimed as an uplift over the original stack.
 
 - Exact 256-input/128-output control with two warmups: TTFT 221.10 ms, TPOT 34.97 ms, decode 28.59 tok/s, aggregate 27.45 tok/s (`benchmarks/optimized_warm.json`).
 - Direct 15-token prompt on the healthy 262K profile: three 128-token requests measured 212.39–214.67 ms TTFT and 28.47–28.50 tok/s (`benchmarks/direct_stream_final_script.json`).

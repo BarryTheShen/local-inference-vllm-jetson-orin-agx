@@ -79,25 +79,21 @@ ValueError: Free memory on device cuda:0 (42.21/61.37 GiB) on startup is less th
 
 This is a host unified-memory budget failure, not a model or quantization failure. Fun-ASR and LazyCat host services were running concurrently.
 
-## 6. Optimized profile applied
+## 6. Production profile restored
 
-`qwen3.6_35b-int8/docker-compose.yml` is the production candidate and is pinned to the exact NVIDIA image digest `sha256:817f0f940d2d9c9067d861d2118d7bf58c40873598f0c35e19c8516269ebc4bd` (vLLM 0.19.0, JetPack R36.4/CUDA 12.6).
+After comparing the experiments with the prior single-session result, the user requested the original INT8 stack be restored. `qwen3.6_35b-int8/docker-compose.yml` now uses the original `ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin` image tag and original scheduler settings:
 
-The serving profile keeps the requested INT8/W8A16 AutoRound weights and vLLM-only runtime:
+- Qwen3.6-35B-A3B-INT8-AutoRound W8A16 weights;
+- `max-model-len=262144`;
+- `gpu-memory-utilization=0.75`;
+- `max-num-seqs=8`;
+- `max-num-batched-tokens=4096`;
+- FP8 KV cache;
+- prefix caching, Qwen3 reasoning parsing, XML tool parsing, and the original tokenizer fallback.
 
-- `max-model-len=262144` — mandatory full Qwen3.6 context setting.
-- `gpu-memory-utilization=0.75` — user-approved target; Fun-ASR is stopped during experiments.
-- `max-num-seqs=3` — production candidate for two-to-three concurrent short requests; single-request decode remains near the 32K control.
-- `max-num-batched-tokens=4096` — required by the model's Mamba alignment (`block_size=2096`); 512 is rejected.
-- `kv-cache-dtype=fp8` — supported compressed cache path on SM 8.7.
-- `attention-backend=FLASHINFER` — explicit FP8-capable backend.
-- prefix caching, chunked prefill, Qwen3 reasoning parsing, and XML tool parsing remain enabled.
-
-The compose file passes `docker compose -f qwen3.6_35b-int8/docker-compose.yml config --quiet`. The image digest is pinned for all download and serve services; no floating `latest` tag remains in the runnable profile.
-
-The earlier 32K latency profile was only an exploratory control. It is not the final deployment because the user requires 262K context.
-
+The digest-pinned image and `max-num-seqs=3` profile were experimental variants and are no longer active in the production compose. Their measurements remain archived below. The original configuration passed `docker compose -f qwen3.6_35b-int8/docker-compose.yml config --quiet`.
 ## 7. 262K startup and request results
+The results in this section are archived experiments, not the restored production launch. The restored original profile is intentionally not restarted by this change.
 
 Startup itself accepts `max_model_len=262144`. With the graph-free profile (`--enforce-eager`) and Fun-ASR stopped:
 
@@ -251,4 +247,4 @@ The accelerated build reached CMake configuration and CUDA compilation. With 8 j
 - `ebeacdb`: commit full-context abort evidence and explicit limitation.
 - `5609d9a`: commit exploratory streaming artifacts.
 
-The production compose is configured for `max_model_len=262144`, FP8 KV, FlashInfer, and the user-approved 0.75 memory target, with Fun-ASR stopped during tests. Startup and normal short requests are validated; exact 260K/262K generation aborts in the pinned vLLM 0.19.0 hybrid path. A custom newer vLLM build or SGLang experiment is the credible next path for end-to-end full-context support.
+The production compose is now restored to the original floating `latest-jetson-orin` INT8 profile with `max-num-seqs=8`. This restoration is intentionally not started here; the user will start it. The experimental single-request speed result remains approximately 28.6 tok/s, so no raw-speed uplift is claimed. The 262K end-to-end limitation remains documented for the vLLM 0.19.0 path.
