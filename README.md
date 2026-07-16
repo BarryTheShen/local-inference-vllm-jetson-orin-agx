@@ -27,7 +27,7 @@ The compose file is restored to the original NVIDIA AI-IoT Jetson Orin INT8 stac
 | `max-num-seqs` | `8` | Original INT8 profile; restores the user's previous scheduler setting |
 | `max-num-batched-tokens` | `4096` | Established prefill budget and compile range |
 | `kv-cache-dtype` | `fp8` | Supported compressed KV cache in vLLM 0.19.0 |
-| `attention-backend` | `FLASHINFER` | Explicit FP8-capable attention backend for Orin SM 8.7 |
+| Attention backend | vLLM default/auto-selected | Original profile; no experimental backend override |
 | Prefix caching | enabled | Helps repeated identical prefixes; does not speed unrelated prompts |
 | Chunked prefill | vLLM default/enabled | Balances long prefills with decode work |
 
