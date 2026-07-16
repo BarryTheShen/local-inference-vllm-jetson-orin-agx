@@ -144,7 +144,6 @@ services:
       - --max-num-batched-tokens=4096                   # lower than Q4 doc's 8192 to save activation memory
       - --enable-prefix-caching
       - --kv-cache-dtype=fp8                            # FP8 is the supported SM 8.7 cache compression path
-      - --attention-backend=FLASHINFER                  # deterministic FP8-capable backend on Orin SM 8.7
       - --reasoning-parser=qwen3                        # keep thinking ON, route <think> into reasoning_content
       - --enable-auto-tool-choice
       - --tool-call-parser=qwen3_xml                    # Claude Code tool use; do NOT use qwen3_coder (vllm#39056)
