@@ -1,12 +1,27 @@
-# Qwen3.6-35B-A3B INT8 on Jetson AGX Orin
+# LLM inference on a Jetson AGX Orin
 
-> Since 2026-11-23 this Jetson serves **Inkling 2 Mini** instead (41 tokens/s for one request, about 550 tokens/s across 128). Its setup is in [`inkling2-mini/`](inkling2-mini/). The rest of this page covers the earlier Qwen deployment.
+This repository holds the setups and benchmarks for the models served on a Jetson AGX Orin 64 GB (L4T R36.4.3, CUDA 12.6, SM 8.7) with vLLM.
 
-Docker Compose deployment and benchmark scripts for serving the Qwen3.6-35B-A3B INT8 AutoRound checkpoint with vLLM on a Jetson AGX Orin 64GB.
+## Current: Inkling 2 Mini
 
-Stack: vLLM 0.19.0 (NVIDIA AI-IoT Jetson image), Docker Compose, Qwen3.6-35B-A3B AutoRound W8A16, L4T R36.4.3, CUDA 12.6, SM 8.7.
+Since 2026-11-23 the Jetson serves Inkling 2 Mini. Released vLLM does not support it on GPUs older than Hopper, so PyTorch, Triton, and vLLM are built from source for the Orin and patched (int8 attention and LM-head weights, Orin-tuned expert kernels, speculative decoding). The full setup is in [`inkling2-mini/`](inkling2-mini/).
 
-## Results
+| Measurement | Untuned | Tuned |
+|---|---|---|
+| One request, decode | 25.7 tokens/s | 40.5 tokens/s |
+| 8 parallel requests, total | 75.5 tokens/s | 108.9 tokens/s |
+| 128 parallel requests, total | – | 551.7 tokens/s |
+| Perplexity (wikitext) | 7.34 | 7.34 |
+
+The Orin kernel tiles are proposed upstream in [vllm-project/humming#223](https://github.com/vllm-project/humming/pull/223).
+
+## Earlier: Qwen3.6-35B-A3B INT8
+
+Docker Compose deployment and benchmark scripts for serving the Qwen3.6-35B-A3B INT8 AutoRound checkpoint with vLLM on the same Jetson, before Inkling replaced it.
+
+Stack: vLLM 0.19.0 (NVIDIA AI-IoT Jetson image), Docker Compose, Qwen3.6-35B-A3B AutoRound W8A16.
+
+### Results
 
 Benchmark runs from the JSON files in `benchmarks/`. Decode is tokens per second for one request. Aggregate is total output tokens per second across all requests; it is not single-session speed.
 
@@ -33,7 +48,7 @@ The concurrency 2 and 3 rows use the `max-num-seqs=3` overlay.
 
 Prompt reading runs at about 2,000–2,400 tokens per second from 1K to 17K tokens (`production_prefill_2026-11-23.json`).
 
-## Quickstart
+### Quickstart
 
 Requirements: a Jetson AGX Orin 64GB with Docker and the NVIDIA container runtime. The profile reserves 0.75 of unified memory (46.03 GiB of 61.37 GiB on the test device), so stop other GPU workloads first.
 
@@ -56,7 +71,7 @@ If the downloads need a proxy, put `HF_PROXY=http://<proxy-host>:<port>` in `qwe
 
 **Security:** port 8000 is published on all host interfaces, and vLLM runs without an API key. Anyone who can reach the host can send requests to the model. Put the host behind a firewall, or change the publish line in `qwen3.6_35b-int8/docker-compose.yml` to `"127.0.0.1:8000:8000"` if only local clients need access.
 
-## Production profile
+### Production profile
 
 Settings from `qwen3.6_35b-int8/docker-compose.yml`:
 
@@ -79,13 +94,13 @@ Do not add `--quantization=auto_round`. The checkpoint metadata selects the Auto
 
 The image tag `latest-jetson-orin` floats. On 2026-07-15 it pointed to the same published image as `0.19.0-r36.4.tegra-aarch64-cu126-22.04`. Check the tag after each pull.
 
-## KV cache
+### KV cache
 
 vLLM 0.19.0 in this image accepts `--kv-cache-dtype` values `auto, bfloat16, float16, fp8, fp8_ds_mla, fp8_e4m3, fp8_e5m2, fp8_inc`. TurboQuant (`turboquant_*`), `int4` and `q4` are rejected by the CLI. TurboQuant first appears in vLLM v0.20.0, and hybrid-model support needs a newer stack than this image provides. `--calculate-kv-scales` is not used: it is deprecated in 0.19.0, and hybrid-cache corruption has been reported with it.
 
 If the FP8 cache must change, test in this order: `fp8_e4m3` only if an explicit dtype is needed; `fp8_e5m2` for diagnosis only; `bfloat16` if FP8 output quality is unacceptable. A candidate is rejected if it fails startup, allocates more KV memory than the FP8 control, produces incoherent or repeating output, or slows TTFT or decode.
 
-## Experiments
+### Experiments
 
 These overlays are not used by the production file. Stop the running server before applying one: `docker compose -f docker-compose.yml -f docker-compose.<name>.yml up`, run from `qwen3.6_35b-int8/`.
 
@@ -100,14 +115,14 @@ These overlays are not used by the production file. Stop the running server befo
 
 `Dockerfile.vllm-source` is an unfinished recipe for building vLLM v0.21.0 on the pinned base image. The compile was stopped before an image was produced.
 
-## Known limitations
+### Known limitations
 
 - 262K: the server starts with `max-model-len=262144`, but generation at 260,000 and 262,143 prompt tokens aborted in every test (`benchmarks/full_context_failures.json`). Do not treat 262K as supported end to end.
 - Concurrency was measured only with `max-num-seqs=3`.
 - Each row is one benchmark run; the ranges show the spread across the requests in that run.
 - No API authentication (see Security above).
 
-## Benchmarking
+### Benchmarking
 
 Wait until the container health check reports healthy, then run one benchmark at a time. The scripts do not restart vLLM, but a failed experiment can still trigger the compose `unless-stopped` restart policy.
 
@@ -123,7 +138,8 @@ python3 scripts/measure_stream.py --warmups 1 --requests 3 --output benchmarks/d
 
 ## Repository layout
 
-- `qwen3.6_35b-int8/`: production compose file, experiment overlays, `Dockerfile.vllm-source`.
+- `inkling2-mini/`: Inkling 2 Mini compose file, Orin tuning table, vLLM patches, source build.
+- `qwen3.6_35b-int8/`: Qwen compose file, experiment overlays, `Dockerfile.vllm-source`.
 - `scripts/`: `benchmark_server.sh`, `measure_stream.py`, `summarize_benchmark.py`.
 - `benchmarks/`: result JSON files.
 - `docs/optimization-log.md`: investigation log with commands, observed errors and decisions.
