@@ -4,7 +4,7 @@ x-hf-download-env: &hf-download-env
   HTTP_PROXY: ${HF_PROXY:-}
   HTTPS_PROXY: ${HF_PROXY:-}
   NO_PROXY: localhost,127.0.0.1,::1,192.168.0.0/16,10.0.0.0/8,hf-mirror.com,.hf-mirror.com   # reach the China mirror DIRECTLY — tunneling it through the overseas proxy causes the HEAD-call LocalEntryNotFoundError
-  HF_ENDPOINT: https://hf-mirror.com
+  HF_ENDPOINT: ${HF_ENDPOINT:-https://hf-mirror.com}
   HF_HUB_ENABLE_HF_TRANSFER: "1"   # parallel chunked download via Rust hf_transfer (~10x speedup); needs huggingface_hub <1.0 (pinned in the pip line below)
   HF_HUB_DISABLE_XET: "1"          # hub 1.x defaults to the Xet backend, which ignores HF_ENDPOINT (hf-mirror) and fails behind the proxy
 
@@ -46,7 +46,7 @@ services:
         mkdir -p "$$DEST"
         echo "[download-35b-int8] Downloading Minachist/Qwen3.6-35B-A3B-INT8-AutoRound (w8a16-gs128) -> $$DEST"
 
-        # NOTE: --revision pins the w8a16 group-size-128 branch (parent doc §3.10a).
+        # NOTE: --revision pins the w8a16 group-size-128 branch.
         if command -v hf >/dev/null 2>&1; then
           hf download Minachist/Qwen3.6-35B-A3B-INT8-AutoRound --revision w8a16-gs128 --local-dir "$$DEST"
         else
@@ -59,7 +59,7 @@ services:
   # ============================================================================
   # PHASE 1B — DOWNLOAD CLEAN QWEN3.6-35B-A3B TOKENIZER FALLBACK
   # (AutoRound VLM checkpoints can trip 'TokenizersBackend does not exist';
-  #  same fix as the 27B Lorbus AutoRound doc / parent §6.6)
+  #  a clean official tokenizer avoids it)
   # ============================================================================
   download-tokenizer:
     image: ghcr.io/nvidia-ai-iot/vllm:latest-jetson-orin
@@ -116,7 +116,7 @@ services:
       stack: 67108864
     restart: unless-stopped
     ports:
-      - "8000:8000"   # publish directly to host — Claude Code talks straight to vLLM
+      - "8000:8000"   # publish to host
     depends_on:
       download-35b-int8:
         condition: service_completed_successfully
@@ -132,7 +132,7 @@ services:
       - --host=0.0.0.0
       - --port=8000
       - --trust-remote-code
-      - --tokenizer=/models/Qwen3.6-35B-A3B-tokenizer   # clean official tokenizer (parent §6.6 fix)
+      - --tokenizer=/models/Qwen3.6-35B-A3B-tokenizer   # clean official tokenizer
       # NO --quantization flag here. vLLM auto-detects AutoRound from the checkpoint
       # (config.json quantization_config, quant_method="auto-round") and loads the W8A16 path.
       # Forcing --quantization=auto_round is an INVALID argparse choice on this build and
@@ -146,7 +146,7 @@ services:
       - --kv-cache-dtype=fp8                            # FP8 is the supported SM 8.7 cache compression path
       - --reasoning-parser=qwen3                        # keep thinking ON, route <think> into reasoning_content
       - --enable-auto-tool-choice
-      - --tool-call-parser=qwen3_xml                    # Claude Code tool use; do NOT use qwen3_coder (vllm#39056)
+      - --tool-call-parser=qwen3_xml                    # do NOT use qwen3_coder (vllm#39056)
     healthcheck:
       # Image has python3 but no curl. Use urllib for a 1-line healthcheck.
       test: ["CMD-SHELL", "python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=3).status==200 else 1)\""]

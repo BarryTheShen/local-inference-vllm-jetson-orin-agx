@@ -6,8 +6,8 @@ Target: Jetson AGX Orin 64GB, Qwen3.6-35B-A3B INT8 AutoRound, vLLM
 ## 1. Repository and source material
 
 - The working directory was not initially a Git worktree. It was initialized and connected to `git@github.com:BarryTheShen/local-inference-vllm-jetson-orin-agx.git`.
-- The remote contained only its initial `LICENSE`; the local baseline deployment and supplied `vLLM docs.zip` were committed as `c45b792`, then merged with the remote license and pushed as `6ea9596`.
-- `vLLM docs.zip` contains a nested Notion export. It was extracted outside the repository and reviewed. The prior notes report approximately 26.5–30 tok/s for the earlier 35B Q4 GPTQ-Marlin profile, recommend real INT8 AutoRound for quality, and recommend FP8 KV cache rather than TurboQuant on this hybrid model.
+- The remote contained only its initial `LICENSE`; the local baseline deployment was committed as `c45b792`, then merged with the remote license and pushed as `6ea9596`.
+- Earlier private notes reported approximately 26.5–30 tok/s for the earlier 35B Q4 GPTQ-Marlin profile, recommended real INT8 AutoRound for quality, and recommended FP8 KV cache rather than TurboQuant on this hybrid model.
 - Model files already exist outside this repository at `/home/nvidia/models/Qwen3.6-35B-A3B-INT8-AutoRound` and `/home/nvidia/models/Qwen3.6-35B-A3B-tokenizer`; no model weights are copied into Git.
 
 ## 2. Host and model facts collected

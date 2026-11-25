@@ -1,5 +1,5 @@
 # Experimental overlay: mandatory 262K context without CUDA graph capture.
-# Fun-ASR must remain stopped during this experiment.
+# Other GPU services must remain stopped during this experiment.
 #   docker compose -f docker-compose.yml -f docker-compose.eager-262k.yml up
 services:
   vllm-35b-int8:

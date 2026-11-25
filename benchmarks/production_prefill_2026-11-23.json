@@ -1,0 +1,37 @@
+[
+ {
+  "prompt_tokens": 60,
+  "seconds": 0.203,
+  "prefill_tps": 295.8
+ },
+ {
+  "prompt_tokens": 355,
+  "seconds": 0.239,
+  "prefill_tps": 1485.2
+ },
+ {
+  "prompt_tokens": 1109,
+  "seconds": 0.481,
+  "prefill_tps": 2307.1
+ },
+ {
+  "prompt_tokens": 2724,
+  "seconds": 1.132,
+  "prefill_tps": 2405.6
+ },
+ {
+  "prompt_tokens": 4352,
+  "seconds": 1.848,
+  "prefill_tps": 2355.4
+ },
+ {
+  "prompt_tokens": 8723,
+  "seconds": 3.794,
+  "prefill_tps": 2299.2
+ },
+ {
+  "prompt_tokens": 17380,
+  "seconds": 8.645,
+  "prefill_tps": 2010.5
+ }
+]

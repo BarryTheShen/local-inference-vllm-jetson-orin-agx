@@ -1,0 +1,47 @@
+{
+ "model": "qwen3.6-35b-a3b-int8",
+ "effort": "low",
+ "time": "2026-11-23 11:55:02",
+ "chat": [
+  {
+   "concurrency": 1,
+   "ttft_p50_s": 0.123,
+   "decode_tps_per_req": 28.52,
+   "aggregate_tps": 28.23,
+   "wall_s": 9.07
+  },
+  {
+   "concurrency": 8,
+   "ttft_p50_s": 0.367,
+   "decode_tps_per_req": 14.84,
+   "aggregate_tps": 116.63,
+   "wall_s": 17.56
+  },
+  {
+   "concurrency": 16,
+   "ttft_p50_s": 0.3865,
+   "decode_tps_per_req": 12.87,
+   "aggregate_tps": 108.84,
+   "wall_s": 37.63
+  },
+  {
+   "concurrency": 32,
+   "ttft_p50_s": 24.555,
+   "decode_tps_per_req": 11.7,
+   "aggregate_tps": 123.97,
+   "wall_s": 66.08
+  }
+ ],
+ "prefill_16k": {
+  "prompt_tokens": 16157,
+  "ttft_s": 8.004,
+  "prefill_tps": 2018.6
+ },
+ "json_extract": {
+  "ok": false,
+  "ttft_s": 1.326,
+  "wall_s": 73.18,
+  "completion_tokens": 2048,
+  "facts": "JSONDecodeError('Unterminated string starting at: line 29 column 18 (char 545)')"
+ }
+}
