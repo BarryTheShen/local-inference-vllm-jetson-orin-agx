@@ -1,0 +1,39 @@
+--- a/vllm/models/inkling2/nvidia/ops/w8.py
++++ b/vllm/models/inkling2/nvidia/ops/w8.py
+@@ -94,22 +94,26 @@
+     tl.store(o_ptr + (idx // N) * som + idx % N, acc.to(o_ptr.dtype.element_ty), mask=mask)
+ 
+ 
+-# Measured on the Jetson AGX Orin (16 SMs, 204.8 GB/s) with tests/w8_tune.py, 2026-11-23, vs bf16 F.linear:
+-#   qkvr 3888x2304  M=1 65.9 us (1.72x)  M=8 67.0 us (1.71x)
+-#   wo_ud 2304x3072 M=1 59.0 us (1.62x)  M=8 58.7 us (1.62x)
+-#   head 201088x2304 M=1 2672 us (2.21x) M=8 2598 us (2.38x)
+-# (BN, BK, SPLIT_K, warps, stages) by row-count bucket and M == 1 vs M > 1.
++# Measured on the Jetson AGX Orin (16 SMs, 204.8 GB/s) with tests/w8_tune.py in CUDA graphs, 2026-11-23, on the
++# in-model shapes (nsys): qkvr 6656x2304 (sliding-window layers) M=1 91.1 us / M=8 91.3 us (82% of bandwidth),
++# qkvr 8704x2304 (global layers) 117.5 / 118.0 us (83%), wo_ud 2304x3072 45.1 / 45.4 us (77%),
++# head 201088x2304 2.61 ms (87%). (BN, BK, SPLIT_K, warps, stages) by row-count bucket for M == 1, M <= 16 and
++# M > 16: the narrow 32-row tiles lose from M = 32 on (tests/w8_batch_check.py: qkvr 0.58-0.77x), where the
++# earlier wide tiles stay. Outputs measured bit-identical to the previous table at M = 1..64 (same script).
+ _ORIN = {
+-    "head": ((64, 128, 4, 2, 2), (64, 128, 1, 4, 4)),
+-    "wide": ((128, 64, 1, 8, 3), (128, 128, 1, 4, 3)),
+-    "mid": ((32, 64, 1, 4, 4), (64, 128, 1, 8, 3)),
++    "head": ((64, 128, 4, 2, 2), (64, 128, 1, 4, 4), (64, 128, 1, 4, 4)),
++    "qkvr_global": ((32, 128, 1, 4, 3), (32, 128, 1, 4, 4), (128, 128, 1, 4, 3)),
++    "qkvr_local": ((32, 128, 1, 2, 2), (64, 128, 1, 4, 2), (128, 128, 1, 4, 3)),
++    "wide": ((128, 64, 1, 8, 3), (128, 128, 1, 4, 3), (128, 128, 1, 4, 3)),
++    "mid": ((32, 128, 2, 4, 3), (32, 128, 1, 4, 4), (64, 128, 1, 8, 3)),
+ }
+ 
+ 
+ @functools.cache
+ def _config(M: int, N: int, K: int) -> tuple[int, int, int, int, int]:
+-    bucket = "head" if N >= 65536 else "wide" if N >= 3072 else "mid"
+-    bn, bk, split, warps, stages = _ORIN[bucket][0 if M == 1 else 1]
++    bucket = ("head" if N >= 65536 else "qkvr_global" if N >= 8192 else "qkvr_local" if N >= 6144
++              else "wide" if N >= 3072 else "mid")
++    bn, bk, split, warps, stages = _ORIN[bucket][0 if M == 1 else 1 if M <= 16 else 2]
+     while K % (split * bk) and split > 1:  # keep EVEN_K-friendly splits for unusual K
+         split //= 2
+     return bn, bk, split, warps, stages

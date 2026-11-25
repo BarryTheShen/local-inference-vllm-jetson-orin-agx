@@ -1,0 +1,37 @@
+diff --git a/vllm/models/inkling2/nvidia/ops/attention_sm90.py b/vllm/models/inkling2/nvidia/ops/attention_sm90.py
+index 3cac9b9..1f3aec0 100644
+--- a/vllm/models/inkling2/nvidia/ops/attention_sm90.py
++++ b/vllm/models/inkling2/nvidia/ops/attention_sm90.py
+@@ -14,6 +14,8 @@ of the rows' visible range, so a split count that depends only on the batch
+ holds for every replay of a CUDA graph.
+ """
+ 
++import os
++
+ import torch
+ 
+ from vllm.triton_utils import tl, triton
+@@ -30,6 +32,12 @@ MODE_OUT_LSE = 0
+ MODE_GATED = 1
+ MODE_PARTIAL = 2
+ 
++# Jetson patch: `VLLM_INKLING_ATTN_PREFILL` / `VLLM_INKLING_ATTN_DECODE` = "BLOCK_N,num_warps,num_stages" override
++# the launch of 128-row (prefill) tiles and of tiles up to 32 rows (decode, verify), whose defaults (64, 8, 2) and
++# (128, 4, 2) were picked on Hopper; unset or empty keeps them.
++_PREFILL_LAUNCH = tuple(int(v) for v in (os.environ.get("VLLM_INKLING_ATTN_PREFILL") or "64,8,2").split(","))
++_DECODE_LAUNCH = tuple(int(v) for v in (os.environ.get("VLLM_INKLING_ATTN_DECODE") or "128,4,2").split(","))
++
+ 
+ @triton.jit
+ def _sigmoid(x):
+@@ -343,7 +351,7 @@ def rel_attention(
+         DRAFT=draft,
+         MODE=mode,
+         BLOCK_M=block_m,
+-        BLOCK_N=64 if block_m >= 128 else 128 if block_m <= 32 else 64,
+-        num_warps=8 if block_m >= 128 else 4,
+-        num_stages=2,
++        BLOCK_N=_PREFILL_LAUNCH[0] if block_m >= 128 else _DECODE_LAUNCH[0] if block_m <= 32 else 64,
++        num_warps=_PREFILL_LAUNCH[1] if block_m >= 128 else _DECODE_LAUNCH[1] if block_m <= 32 else 4,
++        num_stages=_PREFILL_LAUNCH[2] if block_m >= 128 else _DECODE_LAUNCH[2] if block_m <= 32 else 2,
+     )

@@ -1,0 +1,52 @@
+# Inkling 2 Mini on the Jetson AGX Orin: the production service (best measured config, 2026-11-23).
+# Up:   docker compose -f inkling2-mini/docker-compose.yml up -d     (stop other GPU services first)
+# Down: docker compose -f inkling2-mini/docker-compose.yml down
+# Image inkling-jetson:built = the build container from build/run-build.sh, committed after the build
+# (`docker commit inkling-build inkling-jetson:built`); the venv, caches and tuning table live in ~/inkling-build
+# (mounted at /build). See README.md in this folder.
+services:
+  inkling2-mini:
+    image: inkling-jetson:built
+    container_name: inkling2-mini
+    runtime: nvidia
+    network_mode: host
+    ipc: host
+    restart: unless-stopped
+    volumes:
+      - /home/nvidia/inkling-build:/build
+      - /home/nvidia/models/Inkling-2-Mini:/model:ro
+    environment:
+      VLLM_INKLING_W8: attn,head            # int8 copies of attention qkvr/wo_ud and the LM head (patches/w8-int8-dense.patch)
+      VLLM_INKLING_HUMMING_TUNING: /build/tuning/humming-orin.json  # Orin expert-kernel configs (patches/humming-tuning-hook.patch)
+      VLLM_INKLING_ATTN_PREFILL: "32,4,2"   # prefill attention BLOCK_N,warps,stages on Orin (patches/attn-prefill-launch.patch)
+      HUMMING_COMPILER: nvcc                # JetPack NVRTC 12.6 turns bf16 math for sm_87 into traps; nvcc 12.6 is correct
+      HUMMING_CACHE_DIR: /build/cache/humming
+      TRITON_PTXAS_PATH: /usr/local/cuda/bin/ptxas
+      TRITON_CACHE_DIR: /build/cache/triton
+      TORCHINDUCTOR_CACHE_DIR: /build/cache/inductor
+      VLLM_CACHE_ROOT: /build/cache/vllm
+      HF_HUB_OFFLINE: "1"
+    entrypoint: ["/build/venv/bin/vllm"]
+    command:
+      - serve
+      - /model
+      - --served-model-name=inkling-2-mini
+      - --host=0.0.0.0
+      - --port=8000
+      - --max-model-len=131072
+      - --max-num-seqs=128                  # ~550 tok/s total at 128 for batch jobs
+      - --gpu-memory-utilization=0.70       # 0.75 left only ~4 GB free under load (the host's OOM guard kills under ~3 GB)
+      - --max-num-batched-tokens=4096
+      - --kv-cache-dtype=bfloat16
+      - --enable-prefix-caching
+      - --language-model-only
+      - --reasoning-parser=inkling
+      - --tool-call-parser=inkling
+      - --enable-auto-tool-choice
+      - '--speculative-config={"method":"dspark","num_speculative_tokens":7,"num_speculative_tokens_per_batch_size":[[1,1,4],[2,128,0]]}'
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 600s

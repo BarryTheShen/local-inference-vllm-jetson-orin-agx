@@ -1,0 +1,22 @@
+{
+ "w13": [
+  [2, 144, {"block_shape": [8, 128, 128], "warp_shape": [8, 32, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [912, 1840, {"block_shape": [16, 256, 64], "warp_shape": [16, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [1840, 2048, {"block_shape": [32, 256, 64], "warp_shape": [32, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [2048, 3680, {"block_shape": [32, 256, 64], "warp_shape": [32, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [3680, 8192, {"block_shape": [64, 256, 64], "warp_shape": [64, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}],
+  [11136, 14848, {"block_shape": [128, 256, 64], "warp_shape": [128, 32, 64], "num_stages": 2, "num_ctas_per_sm": 1}],
+  [14848, 22144, {"block_shape": [64, 256, 64], "warp_shape": [64, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}],
+  [22144, 33280, {"block_shape": [128, 256, 64], "warp_shape": [128, 32, 64], "num_stages": 2, "num_ctas_per_sm": 1}]
+ ],
+ "w2": [
+  [2, 144, {"block_shape": [8, 128, 128], "warp_shape": [8, 32, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [912, 1840, {"block_shape": [16, 256, 64], "warp_shape": [16, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [1840, 2048, {"block_shape": [32, 256, 64], "warp_shape": [32, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [2048, 3680, {"block_shape": [32, 256, 64], "warp_shape": [32, 64, 64], "num_stages": 4, "num_ctas_per_sm": 2}],
+  [3680, 8192, {"block_shape": [64, 256, 64], "warp_shape": [64, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}],
+  [11136, 14848, {"block_shape": [128, 256, 64], "warp_shape": [128, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}],
+  [14848, 22144, {"block_shape": [64, 256, 64], "warp_shape": [64, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}],
+  [22144, 33280, {"block_shape": [128, 256, 64], "warp_shape": [128, 32, 64], "num_stages": 4, "num_ctas_per_sm": 1}]
+ ]
+}

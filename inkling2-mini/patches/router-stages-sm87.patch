@@ -1,0 +1,14 @@
+--- a/vllm/models/inkling2/nvidia/ops/linear.py
++++ b/vllm/models/inkling2/nvidia/ops/linear.py
+@@ -252,7 +252,10 @@
+     split = groups > 1 and tokens < 4096
+     num_warps = 4 if block_n <= 64 else 8
+     num_stages = 4 if not split else 3 if block_n <= 64 else 2
+-    if small_smem:
++    # Jetson patch: SM87 (Orin) has 164 KB of shared memory per block like SM80; its split (decode-sized) launches
++    # keep 3 stages (bit-identical, 6.2 -> 4.5 us at 1-16 tokens, tests/kgroup_tune.py). Prefill tiles stay capped.
++    sm87_split = split and current_platform.is_device_capability(87)
++    if small_smem and not sm87_split:
+         num_stages = min(num_stages, 2)
+     out = torch.empty(
+         (groups if split else 1, tokens, n),

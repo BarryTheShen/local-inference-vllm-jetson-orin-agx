@@ -1,0 +1,53 @@
+diff --git a/vllm/models/inkling2/nvidia/ops/moe_sm90.py b/vllm/models/inkling2/nvidia/ops/moe_sm90.py
+index 53417df..63ba289 100644
+--- a/vllm/models/inkling2/nvidia/ops/moe_sm90.py
++++ b/vllm/models/inkling2/nvidia/ops/moe_sm90.py
+@@ -9,6 +9,7 @@ gathers each row's token, the down GEMM reads and writes row by row, and
+ """
+ 
+ import json
++import os
+ from typing import TYPE_CHECKING
+ 
+ import torch
+@@ -30,6 +31,32 @@ if TYPE_CHECKING:
+ _DEFAULT_BLOCK_M = 64
+ 
+ 
++def _device_tuning_overrides(name: str, tuning: list) -> None:
++    """Jetson patch: `VLLM_INKLING_HUMMING_TUNING=<file.json>` holding
++    `{"w13": [[lo, hi, {kernel config keys}], ...], "w2": [...]}` applies
++    those keys to the rows `(lo, hi]` of the heuristic table, splitting a
++    bucket `(a, b]` that `(lo, hi]` covers only in part (Humming launches the
++    first entry whose range holds the row count; Humming's SM87 table is the
++    SM80 one, while the Orin has 16 SMs and 204.8 GB/s)."""
++    path = os.environ.get("VLLM_INKLING_HUMMING_TUNING")
++    if not path:
++        return
++    with open(path) as f:
++        overrides = json.load(f).get(name, [])
++    for lo, hi, keys in overrides:
++        split = []
++        for a, b, config in tuning:
++            if b <= lo or hi <= a:
++                split.append([a, b, config])
++                continue
++            if a < lo:
++                split.append([a, lo, config])
++            split.append([max(a, lo), min(b, hi), {**config, **keys}])
++            if hi < b:
++                split.append([hi, b, dict(config)])
++        tuning[:] = split
++
++
+ @triton.jit
+ def _select_kernel(
+     Partials,
+@@ -229,6 +256,7 @@ class HummingExperts:
+             # whose order (and so the result) changes from run to run.
+             for _, _, kernel_config in tuning:
+                 kernel_config["use_stream_k"] = False
++            _device_tuning_overrides(name, tuning)
+             self.configs[name] = config
+             self.tensors[name] = tensors
+             self.tunings[name] = tuning

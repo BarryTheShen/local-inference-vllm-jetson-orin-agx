@@ -1,0 +1,13 @@
+--- a/vllm/models/inkling2/nvidia/attention.py
++++ b/vllm/models/inkling2/nvidia/attention.py
+@@ -293,7 +293,9 @@
+         self.max_decode_query_len = max_decode_query_len(vllm_config)
+         cache_dtype = vllm_config.cache_config.cache_dtype
+         supported: tuple[str, ...] = ("auto", "bfloat16")
+-        if current_platform.is_device_capability_family(120):
++        # Jetson patch: SM87 (Orin) runs the same Triton attention/sconv kernels as SM12x, converting
++        # unit-scale E4M3 KV in software (ops/e4m3.py) since it lacks native FP8.
++        if current_platform.is_device_capability_family(120) or current_platform.is_device_capability(87):
+             supported += ("float16", "fp8", "fp8_e4m3")
+         if cache_dtype not in supported:
+             raise ValueError(f"Inkling2 KV cache dtype must be one of {supported}")
