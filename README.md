@@ -1,5 +1,7 @@
 # Qwen3.6-35B-A3B INT8 on Jetson AGX Orin
 
+> Since 2026-11-23 this Jetson serves **Inkling 2 Mini** instead (41 tokens/s for one request, about 550 tokens/s across 128). Its setup is in [`inkling2-mini/`](inkling2-mini/). The rest of this page covers the earlier Qwen deployment.
+
 Docker Compose deployment and benchmark scripts for serving the Qwen3.6-35B-A3B INT8 AutoRound checkpoint with vLLM on a Jetson AGX Orin 64GB.
 
 Stack: vLLM 0.19.0 (NVIDIA AI-IoT Jetson image), Docker Compose, Qwen3.6-35B-A3B AutoRound W8A16, L4T R36.4.3, CUDA 12.6, SM 8.7.
