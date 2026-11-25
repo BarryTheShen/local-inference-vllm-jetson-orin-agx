@@ -1,25 +1,81 @@
 # LLM inference on a Jetson AGX Orin
 
-This repository holds the setups and benchmarks for the models served on a Jetson AGX Orin 64 GB (L4T R36.4.3, CUDA 12.6, SM 8.7) with vLLM.
+This repository holds the setups and benchmarks for two models served with vLLM on a Jetson AGX Orin 64 GB (L4T R36.4.3, CUDA 12.6, SM 8.7): Inkling 2 Mini, which the Jetson serves since 2026-11-23, and Qwen3.6-35B-A3B INT8, which it served before.
 
-## Current: Inkling 2 Mini
+## Comparison
 
-Since 2026-11-23 the Jetson serves Inkling 2 Mini. Released vLLM does not support it on GPUs older than Hopper, so PyTorch, Triton, and vLLM are built from source for the Orin and patched (int8 attention and LM-head weights, Orin-tuned expert kernels, speculative decoding). The full setup is in [`inkling2-mini/`](inkling2-mini/).
+Both models were measured on the same Jetson with the same benchmark scripts in November 2026.
+
+| | Inkling 2 Mini | Qwen3.6-35B-A3B INT8 |
+| --- | --- | --- |
+| Setup folder | [`inkling2-mini/`](inkling2-mini/) | [`qwen3.6_35b-int8/`](qwen3.6_35b-int8/) |
+| vLLM | main with PR #69165, built from source and patched | 0.19.0 (NVIDIA AI-IoT Jetson image) |
+| Weights | NVFP4 experts; int8 copies of attention and LM head | AutoRound W8A16 |
+| Context | 131,072 tokens | 262,144 configured; full-length generation aborts |
+| One request, decode | 40.5 tokens/s | 28.5 tokens/s |
+| 8 parallel requests, total | 108.9 tokens/s | 116.6 tokens/s |
+| Highest total measured | 551.7 tokens/s (128 requests) | 124.0 tokens/s (32 requests) |
+| Prompt reading | about 1,600–1,800 tokens/s (6K–24K tokens) | about 2,000–2,400 tokens/s (1K–17K tokens) |
+
+## Inkling 2 Mini
+
+vLLM's Inkling 2 Mini support requires a Hopper GPU or newer (compute capability 9.0); the still-open PR #69165 extends it to SM 8.x. PyTorch 2.14, Triton 3.8, and vLLM (PR #69165 at `aade5d0`) are therefore built from source for the Orin, and eight patches add int8 attention and LM-head weights, Orin-tuned expert kernels, and an Orin prefill-attention launch.
+
+### Results
 
 | Measurement | Untuned | Tuned |
-|---|---|---|
+| --- | --- | --- |
 | One request, decode | 25.7 tokens/s | 40.5 tokens/s |
 | 8 parallel requests, total | 75.5 tokens/s | 108.9 tokens/s |
 | 128 parallel requests, total | – | 551.7 tokens/s |
-| Perplexity (wikitext) | 7.34 | 7.34 |
+| Perplexity (wikitext-2) | 7.34 | 7.34 |
+| GSM8K, 5-shot, strict | 0.832 (250 questions) | 0.82–0.85 (100 questions, several runs) |
 
-The Orin kernel tiles are proposed upstream in [vllm-project/humming#223](https://github.com/vllm-project/humming/pull/223).
+### Setup
 
-## Earlier: Qwen3.6-35B-A3B INT8
+1. Copy `inkling2-mini/build/` and `inkling2-mini/patches/` to `~/inkling-build` on the Jetson and run `./run-build.sh` (several hours). Set `BUILD_PROXY` if downloads need a proxy.
+2. Save the build container as the image: `docker commit inkling-build inkling-jetson:built`.
+3. Apply the patches below, in order, to the installed package (the tests patch applies only to the source checkout in `src/vllm`). The venv is owned by root, so run `patch` in the image, for example: `docker run --rm -v ~/inkling-build:/build --entrypoint bash inkling-jetson:built -c 'cd /build/venv/lib/python3.12/site-packages && patch -p1 < /build/patches/w8-int8-dense.patch'`.
+4. Copy `inkling2-mini/humming-orin.json` to `~/inkling-build/tuning/` and the model to `~/models/Inkling-2-Mini`.
+5. Start it with `docker compose -f inkling2-mini/docker-compose.yml up -d`.
 
-Docker Compose deployment and benchmark scripts for serving the Qwen3.6-35B-A3B INT8 AutoRound checkpoint with vLLM on the same Jetson, before Inkling replaced it.
+Patches (`inkling2-mini/patches/`), in the order they apply:
 
-Stack: vLLM 0.19.0 (NVIDIA AI-IoT Jetson image), Docker Compose, Qwen3.6-35B-A3B AutoRound W8A16.
+| Patch | What it changes |
+| --- | --- |
+| `upstream-fdda4ee-sconv-fix`, `upstream-fdda4ee-tests` | A later fix from vLLM PR #69165 |
+| `w8-int8-dense`, `w8-retune-real-shapes` | int8 copies of attention and LM-head weights (`VLLM_INKLING_W8=attn,head`); kernels adapted from [lulakien/inkling2-mini-3090-recipe](https://github.com/lulakien/inkling2-mini-3090-recipe) (Apache-2.0) |
+| `humming-tuning-hook` | Loads `humming-orin.json`, the Orin expert-kernel tiles; the same tiles are proposed upstream in [vllm-project/humming#223](https://github.com/vllm-project/humming/pull/223) |
+| `attn-prefill-launch` | Prefill attention launch for the Orin (`VLLM_INKLING_ATTN_PREFILL=32,4,2`) |
+| `fp8-kv-sm87` | Allows an fp8 KV cache on the Orin (not used by default) |
+| `router-stages-sm87` | Three pipeline stages for the router GEMM on the Orin |
+
+### Production settings
+
+Settings from `inkling2-mini/docker-compose.yml`:
+
+| Setting | Value | Notes |
+| --- | --- | --- |
+| `max-model-len` | `131072` | |
+| `max-num-seqs` | `128` | Total throughput keeps rising up to 128 requests |
+| `gpu-memory-utilization` | `0.70` | `0.75` left only about 4 GB free under load |
+| `max-num-batched-tokens` | `4096` | Prefill token budget |
+| `kv-cache-dtype` | `bfloat16` | |
+| Prefix caching | enabled | |
+| Speculative decoding | DSpark, 4 draft tokens for one running request, none from two | Drafting slows batches down |
+| Reasoning and tool parsers | `inkling` | |
+| `HUMMING_COMPILER` | `nvcc` | Required, see Known limitations |
+
+### Known limitations
+
+- JetPack's NVRTC 12.6 compiles bf16 arithmetic for SM 8.7 into traps, so `HUMMING_COMPILER=nvcc` is required (reported in [vllm-project/humming#222](https://github.com/vllm-project/humming/issues/222)).
+- At 128 parallel requests each request gets about 4–5 tokens/s; the setting is meant for batch jobs.
+- The patches were made against PR #69165 at `aade5d0`; a newer vLLM may need them rebased.
+- No API authentication, and the service uses host networking on port 8000: anyone who can reach the host can send requests. Put the host behind a firewall.
+
+## Qwen3.6-35B-A3B INT8
+
+Docker Compose deployment and benchmark scripts for serving the Qwen3.6-35B-A3B INT8 AutoRound checkpoint with vLLM 0.19.0 (NVIDIA AI-IoT Jetson image). The container is stopped but kept on the Jetson.
 
 ### Results
 
@@ -48,7 +104,7 @@ The concurrency 2 and 3 rows use the `max-num-seqs=3` overlay.
 
 Prompt reading runs at about 2,000–2,400 tokens per second from 1K to 17K tokens (`production_prefill_2026-11-23.json`).
 
-### Quickstart
+### Setup
 
 Requirements: a Jetson AGX Orin 64GB with Docker and the NVIDIA container runtime. The profile reserves 0.75 of unified memory (46.03 GiB of 61.37 GiB on the test device), so stop other GPU workloads first.
 
@@ -71,7 +127,7 @@ If the downloads need a proxy, put `HF_PROXY=http://<proxy-host>:<port>` in `qwe
 
 **Security:** port 8000 is published on all host interfaces, and vLLM runs without an API key. Anyone who can reach the host can send requests to the model. Put the host behind a firewall, or change the publish line in `qwen3.6_35b-int8/docker-compose.yml` to `"127.0.0.1:8000:8000"` if only local clients need access.
 
-### Production profile
+### Production settings
 
 Settings from `qwen3.6_35b-int8/docker-compose.yml`:
 

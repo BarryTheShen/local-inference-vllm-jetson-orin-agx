@@ -3,7 +3,7 @@
 # Down: docker compose -f inkling2-mini/docker-compose.yml down
 # Image inkling-jetson:built = the build container from build/run-build.sh, committed after the build
 # (`docker commit inkling-build inkling-jetson:built`); the venv, caches and tuning table live in ~/inkling-build
-# (mounted at /build). See README.md in this folder.
+# (mounted at /build). See the repository README.
 services:
   inkling2-mini:
     image: inkling-jetson:built
